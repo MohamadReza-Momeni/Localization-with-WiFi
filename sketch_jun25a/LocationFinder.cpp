@@ -1,3 +1,4 @@
+#include "WString.h"
 #include "LocationFinder.h"
 #include <math.h>  // for pow()
 
@@ -19,6 +20,9 @@ bool LocationFinder::findLocation(float& x, float& y) {
     float xi = hotspots[i].x;
     float yi = hotspots[i].y;
     float di = rssiToDistance(hotspots[i].rssi);
+    Serial.print("Distance from ");
+    Serial.print(hotspots[i].ssid);
+    Serial.println(" is " + String(di) + ".");
 
     A += 2 * xi;
     B += 2 * yi;

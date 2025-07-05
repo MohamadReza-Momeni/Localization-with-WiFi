@@ -85,3 +85,14 @@ void HotspotDatabase::listAll() {
     }
   }
 }
+
+void HotspotDatabase::clear() {
+  for (int i = 0; i < MAX_HOTSPOTS; i++) {
+    int addr = (i * sizeof(HotspotEntry)) + sizeof(uint8_t);
+    HotspotEntry entry;
+    memset(&entry, 0, sizeof(HotspotEntry)); // Clear entry to zeros
+    EEPROM.put(addr, entry);
+  }
+  EEPROM.commit();
+  Serial.println("All hotspots cleared from EEPROM.");
+}

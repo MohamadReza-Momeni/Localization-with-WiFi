@@ -330,54 +330,51 @@ void selectHotspots() {
 
 
 void findLocation() {
-    static unsigned long lastScanTime = 0;
-    const unsigned long scanInterval = 5000; // 5 seconds
+  static unsigned long lastScanTime = 0;
+  const unsigned long scanInterval = 2000;  // 5 seconds
 
-    // Perform scan and localization if it's time
-    if (millis() - lastScanTime >= scanInterval) {
-        if (selectedHotspots.size() < 3) {
-            Serial.println("\nError: At least 3 hotspots are required for localization.");
-            Serial.println("Please select more hotspots using option 2.");
-            Serial.println("Enter 'q' to return to menu:");
-            lastScanTime = millis();
-            return;
-        }
-
-        // // Update RSSI values for selected hotspots
-        // updateSelectedHotspotsRSSI();
-
-        // Perform localization
-        Serial.println("\nFinding location using trilateration...");
-        LocationFinder locator(selectedHotspots);
-        float x, y;
-        if (locator.findLocation(x, y)) {
-            Serial.print("Estimated ESP32 location: (");
-            Serial.print(x);
-            Serial.print(", ");
-            Serial.print(y);
-            Serial.println(")");
-        } else {
-            Serial.println("Failed to estimate location. Ensure hotspots have valid positions and RSSI values.");
-        }
-        lastScanTime = millis();
+  // Perform scan and localization if it's time
+  if (millis() - lastScanTime >= scanInterval) {
+    if (selectedHotspots.size() < 3) {
+      Serial.println("\nError: At least 3 hotspots are required for localization.");
+      Serial.println("Please select more hotspots using option 2.");
+      lastScanTime = millis();
+      currentMode = IDLE;
+      previousMode = FIND_LOCATION;
+      return;
     }
 
-    // Check for user input to exit
-    Serial.println("\nEnter 'q' to return to menu:");
-    unsigned long startTime = millis();
-    while (!Serial.available() && millis() - startTime < scanInterval) {
-        delay(100);
-    }
+    // // Update RSSI values for selected hotspots
+    // updateSelectedHotspotsRSSI();
 
-    if (Serial.available()) {
-        String input = Serial.readStringUntil('\n');
-        input.trim();
-        if (input == "q") {
-            Serial.println("Returning to menu.");
-            currentMode = IDLE;
-            previousMode = FIND_LOCATION;
-        }
+    // Perform localization
+    Serial.println("\nFinding location using trilateration...");
+    LocationFinder locator(selectedHotspots);
+    float x, y;
+    if (locator.findLocation(x, y)) {
+      Serial.print("Estimated ESP32 location: (" + String(x) + ", " + String(y) + ")");
+    } else {
+      Serial.println("Failed to estimate location. Ensure hotspots have valid positions and RSSI values.");
     }
+    lastScanTime = millis();
+  }
+
+  // Check for user input to exit
+  Serial.println("\nEnter 'q' to return to menu:");
+  unsigned long startTime = millis();
+  while (!Serial.available() && millis() - startTime < scanInterval) {
+    delay(100);
+  }
+
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    if (input == "q") {
+      Serial.println("Returning to menu.");
+      currentMode = IDLE;
+      previousMode = FIND_LOCATION;
+    }
+  }
 }
 
 void useBaseStation() {
@@ -397,33 +394,32 @@ void changeHotspotLocation() {
 
   Serial.println("\nSelected Hotspots:");
   for (size_t i = 0; i < selectedHotspots.size(); i++) {
-    Serial.print(i + 1);
-    Serial.print(": ");
+    Serial.print(String(i + 1) + ": ");
     Serial.print(selectedHotspots[i].ssid);
-    Serial.print(" (Current Pos: (");
-    Serial.print(selectedHotspots[i].x);
-    Serial.print(", ");
-    Serial.print(selectedHotspots[i].y);
-    Serial.println("))");
+    Serial.print(" (Current Pos: (" + String(selectedHotspots[i].x) + ", " + String(selectedHotspots[i].y) + "))");
   }
 
-  Serial.println("\nEnter the number of the hotspot to change location, or '0' to return to menu:");
+  Serial.println("\nEnter the number of the hotspot to change location.");
+  Serial.println("Enter 'q' to return to menu.");
+  Serial.println("Enter 'c' to clear database.");
   while (!Serial.available()) {
     delay(100);
   }
   String input = Serial.readStringUntil('\n');
   input.trim();
-  int choice = input.toInt();
 
-  if (choice == 0) {
+  if (input == "q") {
     Serial.println("Returning to menu.");
     currentMode = IDLE;
     previousMode = CHANGE_LOCATION;
     return;
   }
+  else if (input == "c") {
+    hotspotDB.clear();
+  }
 
-  if (choice > 0 && choice <= (int)selectedHotspots.size()) {
-    WiFiHotspot& hotspot = selectedHotspots[choice - 1];
+  else if (input.toInt() > 0 && input.toInt() <= (int)selectedHotspots.size()) {
+    WiFiHotspot& hotspot = selectedHotspots[input.toInt() - 1];
     Serial.print("Enter new x coordinate for ");
     Serial.print(hotspot.ssid);
     Serial.println(":");

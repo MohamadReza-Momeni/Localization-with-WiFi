@@ -19,6 +19,7 @@ public:
   void save(const String& ssid, float x, float y);
   bool load(const String& ssid, float& x, float& y);
   void listAll();
+  void clear();
 };
 
 #endif
