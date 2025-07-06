@@ -345,7 +345,7 @@ void findLocation() {
     }
 
     // // Update RSSI values for selected hotspots
-    // updateSelectedHotspotsRSSI();
+    updateSelectedHotspotsRSSI();
 
     // Perform localization
     Serial.println("\nFinding location using trilateration...");
@@ -467,4 +467,42 @@ String printLocalizationTechnique(LocalizationTechnique technique) {
     case WiFi_LoRa_BaseStation: return "WiFi + LoRa + BaseStation";
     default: return "Unknown";
   }
+}
+
+void updateSelectedHotspotsRSSI() {
+  Serial.println("Updating RSSI values for selected hotspots...");
+  int n = WiFi.scanNetworks(false, false); // Re-scan networks
+  if (n == 0) {
+    Serial.println("No networks found during RSSI update.");
+    return;
+  }
+  std::vector<WiFiHotspot> networks;
+  for (int i = 0; i < n; i++) {
+    WiFiHotspot hotspot;
+    hotspot.ssid = WiFi.SSID(i);
+    hotspot.rssi = WiFi.RSSI(i);
+    networks.push_back(hotspot);
+  }
+  for (auto& selected : selectedHotspots) {
+    bool found = false;
+    for (const auto& scanned : networks) {
+      if (selected.ssid == scanned.ssid) {
+        selected.rssi = scanned.rssi;
+        found = true;
+        Serial.print("Updated RSSI for ");
+        Serial.print(selected.ssid);
+        Serial.print(": ");
+        Serial.print(selected.rssi);
+        Serial.println(" dBm");
+        break;
+      }
+    }
+    if (!found) {
+      Serial.print("Warning: Hotspot ");
+      Serial.print(selected.ssid);
+      Serial.println(" not found in current scan.");
+      selected.rssi = -100; // Set a default low RSSI if not found
+    }
+  }
+  WiFi.scanDelete();
 }
