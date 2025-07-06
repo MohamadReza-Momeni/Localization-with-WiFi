@@ -38,6 +38,7 @@ void useBaseStation();
 void changeHotspotLocation();
 void viewDatabase();
 String printLocalizationTechnique(LocalizationTechnique technique);
+void updateSelectedHotspotsRSSI();
 
 
 void setup() {
@@ -110,6 +111,8 @@ void loop() {
     }
   } else if (currentMode == SELECT_HOTSPOTS) {
     selectHotspots();
+  } else if (currentMode == FIND_LOCATION){
+    findLocation();
   }
 }
 
@@ -121,16 +124,7 @@ void displayMenu() {
   Serial.println("\nSelected Hotspots:");
   if (!selectedHotspots.empty()) {
     for (size_t i = 0; i < selectedHotspots.size(); i++) {
-      Serial.print(i + 1);
-      Serial.print(": ");
-      Serial.print(selectedHotspots[i].ssid);
-      Serial.print(" (RSSI: ");
-      Serial.print(selectedHotspots[i].rssi);
-      Serial.print(" dBm, Pos: (");
-      Serial.print(selectedHotspots[i].x);
-      Serial.print(", ");
-      Serial.print(selectedHotspots[i].y);
-      Serial.println("))");
+      Serial.println(String(i + 1) + ": " + selectedHotspots[i].ssid + " (RSSI: " + selectedHotspots[i].rssi + " dBm, Pos: (" + selectedHotspots[i].x + ", " + selectedHotspots[i].y + "))");
     }
   } else {
     Serial.println("No hotspots selected yet.");
@@ -175,12 +169,7 @@ void scanAndDisplayNetworks() {
   // Display sorted networks
   Serial.println("Networks found (sorted by RSSI):");
   for (size_t i = 0; i < networks.size(); i++) {
-    Serial.print(i + 1);
-    Serial.print(": ");
-    Serial.print(networks[i].ssid);
-    Serial.print(" (RSSI: ");
-    Serial.print(networks[i].rssi);
-    Serial.println(" dBm)");
+    Serial.println(String(i + 1) + ": " + networks[i].ssid + " (RSSI: " + networks[i].rssi + " dBm)");
   }
 
   // Free scan results
@@ -273,24 +262,19 @@ void selectHotspots() {
         if (hotspotDB.load(newHotspot.ssid, x, y)) {
           newHotspot.x = x;
           newHotspot.y = y;
-          Serial.print("Loaded position from database: (");
-          Serial.print(x);
-          Serial.print(", ");
-          Serial.print(y);
-          Serial.println(")");
+          Serial.println("Loaded position from database: (" + String(x) + ", " + String(y) + ")");
+
         } else {
           // Prompt for position
-          Serial.print("Enter x coordinate for ");
-          Serial.print(newHotspot.ssid);
-          Serial.println(":");
+          Serial.println("Enter x coordinate for " + newHotspot.ssid + ":");
+
           while (!Serial.available()) {
             delay(100);
           }
           newHotspot.x = Serial.readStringUntil('\n').toFloat();
 
-          Serial.print("Enter y coordinate for ");
-          Serial.print(newHotspot.ssid);
-          Serial.println(":");
+          Serial.println("Enter y coordinate for " + newHotspot.ssid + ":");
+
           while (!Serial.available()) {
             delay(100);
           }
@@ -298,30 +282,16 @@ void selectHotspots() {
 
           // Save to EEPROM
           hotspotDB.save(newHotspot.ssid, newHotspot.x, newHotspot.y);
-          Serial.print("Saved position to database: (");
-          Serial.print(newHotspot.x);
-          Serial.print(", ");
-          Serial.print(newHotspot.y);
-          Serial.println(")");
+          Serial.println("Saved position to database: (" + String(newHotspot.x) + ", " + String(newHotspot.y) + ")");
         }
         selectedHotspots.push_back(newHotspot);
-        Serial.print("Selected: ");
-        Serial.print(newHotspot.ssid);
-        Serial.print(" (RSSI: ");
-        Serial.print(newHotspot.rssi);
-        Serial.print(" dBm, Pos: (");
-        Serial.print(newHotspot.x);
-        Serial.print(", ");
-        Serial.print(newHotspot.y);
-        Serial.println("))");
+        Serial.println("Selected: " + newHotspot.ssid + " (RSSI: " + String(newHotspot.rssi) + " dBm, Pos: (" + String(newHotspot.x) + ", " + String(newHotspot.y) + "))");
+
       } else {
-        Serial.print("Hotspot ");
-        Serial.print(networks[sel - 1].ssid);
-        Serial.println(" already selected.");
+        Serial.println("Hotspot " + networks[sel - 1].ssid + " already selected.");
       }
     } else {
-      Serial.print("Invalid selection: ");
-      Serial.println(sel);
+      Serial.print("Invalid selection: " + sel);
     }
   }
 
@@ -360,10 +330,13 @@ void findLocation() {
   }
 
   // Check for user input to exit
-  Serial.println("\nEnter 'q' to return to menu:");
   unsigned long startTime = millis();
   while (!Serial.available() && millis() - startTime < scanInterval) {
     delay(100);
+  }
+
+  if(!Serial.available()){
+    return;
   }
 
   if (Serial.available()) {
@@ -413,8 +386,7 @@ void changeHotspotLocation() {
     currentMode = IDLE;
     previousMode = CHANGE_LOCATION;
     return;
-  }
-  else if (input == "c") {
+  } else if (input == "c") {
     hotspotDB.clear();
   }
 
@@ -438,11 +410,8 @@ void changeHotspotLocation() {
 
     // Update EEPROM
     hotspotDB.save(hotspot.ssid, hotspot.x, hotspot.y);
-    Serial.print("Updated position in database: (");
-    Serial.print(hotspot.x);
-    Serial.print(", ");
-    Serial.print(hotspot.y);
-    Serial.println(")");
+    Serial.println("Updated position in database: (" + String(hotspot.x) + ", " + String(hotspot.y) + ")");
+
   } else {
     Serial.println("Invalid selection.");
   }
@@ -470,8 +439,8 @@ String printLocalizationTechnique(LocalizationTechnique technique) {
 }
 
 void updateSelectedHotspotsRSSI() {
-  Serial.println("Updating RSSI values for selected hotspots...");
-  int n = WiFi.scanNetworks(false, false); // Re-scan networks
+  Serial.println("\nUpdating RSSI values for selected hotspots...");
+  int n = WiFi.scanNetworks(false, false);  // Re-scan networks
   if (n == 0) {
     Serial.println("No networks found during RSSI update.");
     return;
@@ -489,11 +458,8 @@ void updateSelectedHotspotsRSSI() {
       if (selected.ssid == scanned.ssid) {
         selected.rssi = scanned.rssi;
         found = true;
-        Serial.print("Updated RSSI for ");
-        Serial.print(selected.ssid);
-        Serial.print(": ");
-        Serial.print(selected.rssi);
-        Serial.println(" dBm");
+        Serial.println("Updated RSSI for " + selected.ssid + ": " + String(selected.rssi) + " dBm");
+
         break;
       }
     }
@@ -501,7 +467,7 @@ void updateSelectedHotspotsRSSI() {
       Serial.print("Warning: Hotspot ");
       Serial.print(selected.ssid);
       Serial.println(" not found in current scan.");
-      selected.rssi = -100; // Set a default low RSSI if not found
+      selected.rssi = -100;  // Set a default low RSSI if not found
     }
   }
   WiFi.scanDelete();
