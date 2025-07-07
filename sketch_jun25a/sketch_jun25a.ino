@@ -114,6 +114,8 @@ void loop() {
   } else if (currentMode == FIND_LOCATION){
     findLocation();
   }
+
+  updateSelectedHotspotsRSSI();
 }
 
 void displayMenu() {
@@ -301,7 +303,7 @@ void selectHotspots() {
 
 void findLocation() {
   static unsigned long lastScanTime = 0;
-  const unsigned long scanInterval = 2000;  // 5 seconds
+  const unsigned long scanInterval = 500;  // 5 seconds
 
   // Perform scan and localization if it's time
   if (millis() - lastScanTime >= scanInterval) {
@@ -315,14 +317,14 @@ void findLocation() {
     }
 
     // // Update RSSI values for selected hotspots
-    updateSelectedHotspotsRSSI();
+    // updateSelectedHotspotsRSSI();
 
     // Perform localization
     Serial.println("\nFinding location using trilateration...");
     LocationFinder locator(selectedHotspots);
     float x, y;
     if (locator.findLocation(x, y)) {
-      Serial.print("Estimated ESP32 location: (" + String(x) + ", " + String(y) + ")");
+      Serial.println("Estimated ESP32 location: (" + String(x) + ", " + String(y) + ")");
     } else {
       Serial.println("Failed to estimate location. Ensure hotspots have valid positions and RSSI values.");
     }
@@ -439,12 +441,14 @@ String printLocalizationTechnique(LocalizationTechnique technique) {
 }
 
 void updateSelectedHotspotsRSSI() {
-  Serial.println("\nUpdating RSSI values for selected hotspots...");
-  int n = WiFi.scanNetworks(false, false);  // Re-scan networks
+  // Serial.println("Updating RSSI values for selected hotspots...");
+  int n = WiFi.scanNetworks(false, false); // Re-scan networks
   if (n == 0) {
-    Serial.println("No networks found during RSSI update.");
+    // Serial.println("No networks found during RSSI update. Clearing all selected hotspots.");
+    selectedHotspots.clear();
     return;
   }
+
   std::vector<WiFiHotspot> networks;
   for (int i = 0; i < n; i++) {
     WiFiHotspot hotspot;
@@ -452,23 +456,34 @@ void updateSelectedHotspotsRSSI() {
     hotspot.rssi = WiFi.RSSI(i);
     networks.push_back(hotspot);
   }
-  for (auto& selected : selectedHotspots) {
+
+  // Create a new vector for hotspots that are still connected
+  std::vector<WiFiHotspot> updatedHotspots;
+  for (const auto& selected : selectedHotspots) {
     bool found = false;
     for (const auto& scanned : networks) {
       if (selected.ssid == scanned.ssid) {
-        selected.rssi = scanned.rssi;
+        WiFiHotspot updatedHotspot = selected;
+        updatedHotspot.rssi = scanned.rssi;
+        updatedHotspots.push_back(updatedHotspot);
+        // Serial.print("Updated RSSI for ");
+        // Serial.print(selected.ssid);
+        // Serial.print(": ");
+        // Serial.print(updatedHotspot.rssi);
+        // Serial.println(" dBm");
         found = true;
-        Serial.println("Updated RSSI for " + selected.ssid + ": " + String(selected.rssi) + " dBm");
-
         break;
       }
     }
     if (!found) {
-      Serial.print("Warning: Hotspot ");
+      Serial.print("\Hotspot ");
       Serial.print(selected.ssid);
-      Serial.println(" not found in current scan.");
-      selected.rssi = -100;  // Set a default low RSSI if not found
+      Serial.println(" disconnected. Removing from selected hotspots.");
     }
   }
+
+  // Replace selectedHotspots with updated 
+  selectedHotspots = std::move(updatedHotspots);
+
   WiFi.scanDelete();
 }
