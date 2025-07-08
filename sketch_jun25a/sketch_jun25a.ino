@@ -40,7 +40,6 @@ void viewDatabase();
 String printLocalizationTechnique(LocalizationTechnique technique);
 void updateSelectedHotspotsRSSI();
 
-
 void setup() {
   Serial.begin(115200);
   while (!Serial) {
@@ -126,7 +125,7 @@ void displayMenu() {
   Serial.println("\nSelected Hotspots:");
   if (!selectedHotspots.empty()) {
     for (size_t i = 0; i < selectedHotspots.size(); i++) {
-      Serial.println(String(i + 1) + ": " + selectedHotspots[i].ssid + " (RSSI: " + selectedHotspots[i].rssi + " dBm, Pos: (" + selectedHotspots[i].x + ", " + selectedHotspots[i].y + "))");
+      Serial.println(String(i + 1) + ": " + selectedHotspots[i].ssid + " (RSSI: " + selectedHotspots[i].rssi + " dBm, Pos: (" + selectedHotspots[i].x + ", " + selectedHotspots[i].y + "), RSSI@1m: " + selectedHotspots[i].rssiAt1m + ", PathLoss: " + selectedHotspots[i].pathLossExponent + ")");
     }
   } else {
     Serial.println("No hotspots selected yet.");
@@ -162,6 +161,8 @@ void scanAndDisplayNetworks() {
     hotspot.rssi = WiFi.RSSI(i);
     hotspot.x = 0.0;
     hotspot.y = 0.0;
+    hotspot.rssiAt1m = -45.0; // 
+    hotspot.pathLossExponent = 2.5; // Default value
     networks.push_back(hotspot);
   }
 
@@ -244,6 +245,8 @@ void selectHotspots() {
     hotspot.rssi = WiFi.RSSI(i);
     hotspot.x = 0.0;
     hotspot.y = 0.0;
+    hotspot.rssiAt1m = -45.0; // Default value
+    hotspot.pathLossExponent = 2.5; // Default value
     networks.push_back(hotspot);
   }
   std::sort(networks.begin(), networks.end(), compareByRSSI);
@@ -260,50 +263,61 @@ void selectHotspots() {
       if (!alreadySelected) {
         WiFiHotspot newHotspot = networks[sel - 1];
         // Check if hotspot exists in EEPROM
-        float x, y;
-        if (hotspotDB.load(newHotspot.ssid, x, y)) {
+        float x, y, rssiAt1m, pathLossExponent;
+        if (hotspotDB.load(newHotspot.ssid, x, y, rssiAt1m, pathLossExponent)) {
           newHotspot.x = x;
           newHotspot.y = y;
-          Serial.println("Loaded position from database: (" + String(x) + ", " + String(y) + ")");
+          newHotspot.rssiAt1m = rssiAt1m;
+          newHotspot.pathLossExponent = pathLossExponent;
+          Serial.println("Loaded position from database: (" + String(x) + ", " + String(y) + "), RSSI@1m: " + String(rssiAt1m) + ", PathLoss: " + String(pathLossExponent));
 
         } else {
-          // Prompt for position
+          // Prompt for position and parameters
           Serial.println("Enter x coordinate for " + newHotspot.ssid + ":");
-
           while (!Serial.available()) {
             delay(100);
           }
           newHotspot.x = Serial.readStringUntil('\n').toFloat();
 
           Serial.println("Enter y coordinate for " + newHotspot.ssid + ":");
-
           while (!Serial.available()) {
             delay(100);
           }
           newHotspot.y = Serial.readStringUntil('\n').toFloat();
 
+          Serial.println("Enter RSSI at 1 meter for " + newHotspot.ssid + " (e.g., -45.0):");
+          while (!Serial.available()) {
+            delay(100);
+          }
+          newHotspot.rssiAt1m = Serial.readStringUntil('\n').toFloat();
+
+          Serial.println("Enter path loss exponent for " + newHotspot.ssid + " (e.g., 2.5):");
+          while (!Serial.available()) {
+            delay(100);
+          }
+          newHotspot.pathLossExponent = Serial.readStringUntil('\n').toFloat();
+
           // Save to EEPROM
-          hotspotDB.save(newHotspot.ssid, newHotspot.x, newHotspot.y);
-          Serial.println("Saved position to database: (" + String(newHotspot.x) + ", " + String(newHotspot.y) + ")");
+          hotspotDB.save(newHotspot.ssid, newHotspot.x, newHotspot.y, newHotspot.rssiAt1m, newHotspot.pathLossExponent);
+          Serial.println("Saved position to database: (" + String(newHotspot.x) + ", " + String(newHotspot.y) + "), RSSI@1m: " + String(newHotspot.rssiAt1m) + ", PathLoss: " + String(newHotspot.pathLossExponent));
         }
         selectedHotspots.push_back(newHotspot);
-        Serial.println("Selected: " + newHotspot.ssid + " (RSSI: " + String(newHotspot.rssi) + " dBm, Pos: (" + String(newHotspot.x) + ", " + String(newHotspot.y) + "))");
+        Serial.println("Selected: " + newHotspot.ssid + " (RSSI: " + String(newHotspot.rssi) + " dBm, Pos: (" + String(newHotspot.x) + ", " + String(newHotspot.y) + "), RSSI@1m: " + String(newHotspot.rssiAt1m) + ", PathLoss: " + String(newHotspot.pathLossExponent) + ")");
 
       } else {
         Serial.println("Hotspot " + networks[sel - 1].ssid + " already selected.");
       }
     } else {
-      Serial.print("Invalid selection: " + sel);
+      Serial.println("Invalid selection: " + String(sel));
     }
   }
 
   WiFi.scanDelete();
 }
 
-
 void findLocation() {
   static unsigned long lastScanTime = 0;
-  const unsigned long scanInterval = 500;  // 5 seconds
+  const unsigned long scanInterval = 500;  // 0.5 seconds
 
   // Perform scan and localization if it's time
   if (millis() - lastScanTime >= scanInterval) {
@@ -315,9 +329,6 @@ void findLocation() {
       previousMode = FIND_LOCATION;
       return;
     }
-
-    // // Update RSSI values for selected hotspots
-    // updateSelectedHotspotsRSSI();
 
     // Perform localization
     Serial.println("\nFinding location using trilateration...");
@@ -337,7 +348,7 @@ void findLocation() {
     delay(100);
   }
 
-  if(!Serial.available()){
+  if (!Serial.available()) {
     return;
   }
 
@@ -369,9 +380,7 @@ void changeHotspotLocation() {
 
   Serial.println("\nSelected Hotspots:");
   for (size_t i = 0; i < selectedHotspots.size(); i++) {
-    Serial.print(String(i + 1) + ": ");
-    Serial.print(selectedHotspots[i].ssid);
-    Serial.print(" (Current Pos: (" + String(selectedHotspots[i].x) + ", " + String(selectedHotspots[i].y) + "))");
+    Serial.println(String(i + 1) + ": " + selectedHotspots[i].ssid + " (Current Pos: (" + String(selectedHotspots[i].x) + ", " + String(selectedHotspots[i].y) + "), RSSI@1m: " + String(selectedHotspots[i].rssiAt1m) + ", PathLoss: " + String(selectedHotspots[i].pathLossExponent) + ")");
   }
 
   Serial.println("\nEnter the number of the hotspot to change location.");
@@ -390,9 +399,7 @@ void changeHotspotLocation() {
     return;
   } else if (input == "c") {
     hotspotDB.clear();
-  }
-
-  else if (input.toInt() > 0 && input.toInt() <= (int)selectedHotspots.size()) {
+  } else if (input.toInt() > 0 && input.toInt() <= (int)selectedHotspots.size()) {
     WiFiHotspot& hotspot = selectedHotspots[input.toInt() - 1];
     Serial.print("Enter new x coordinate for ");
     Serial.print(hotspot.ssid);
@@ -410,9 +417,25 @@ void changeHotspotLocation() {
     }
     hotspot.y = Serial.readStringUntil('\n').toFloat();
 
+    Serial.print("Enter new RSSI at 1 meter for ");
+    Serial.print(hotspot.ssid);
+    Serial.println(" (e.g., -45.0):");
+    while (!Serial.available()) {
+      delay(100);
+    }
+    hotspot.rssiAt1m = Serial.readStringUntil('\n').toFloat();
+
+    Serial.print("Enter new path loss exponent for ");
+    Serial.print(hotspot.ssid);
+    Serial.println(" (e.g., 2.5):");
+    while (!Serial.available()) {
+      delay(100);
+    }
+    hotspot.pathLossExponent = Serial.readStringUntil('\n').toFloat();
+
     // Update EEPROM
-    hotspotDB.save(hotspot.ssid, hotspot.x, hotspot.y);
-    Serial.println("Updated position in database: (" + String(hotspot.x) + ", " + String(hotspot.y) + ")");
+    hotspotDB.save(hotspot.ssid, hotspot.x, hotspot.y, hotspot.rssiAt1m, hotspot.pathLossExponent);
+    Serial.println("Updated position in database: (" + String(hotspot.x) + ", " + String(hotspot.y) + "), RSSI@1m: " + String(hotspot.rssiAt1m) + ", PathLoss: " + String(hotspot.pathLossExponent));
 
   } else {
     Serial.println("Invalid selection.");
@@ -423,9 +446,7 @@ void changeHotspotLocation() {
 }
 
 void viewDatabase() {
-  std::vector<HotspotEntry> database;
   hotspotDB.listAll();
-
   currentMode = IDLE;
   previousMode = VIEW_DATABASE;
 }
@@ -441,10 +462,8 @@ String printLocalizationTechnique(LocalizationTechnique technique) {
 }
 
 void updateSelectedHotspotsRSSI() {
-  // Serial.println("Updating RSSI values for selected hotspots...");
   int n = WiFi.scanNetworks(false, false); // Re-scan networks
   if (n == 0) {
-    // Serial.println("No networks found during RSSI update. Clearing all selected hotspots.");
     selectedHotspots.clear();
     return;
   }
@@ -454,6 +473,10 @@ void updateSelectedHotspotsRSSI() {
     WiFiHotspot hotspot;
     hotspot.ssid = WiFi.SSID(i);
     hotspot.rssi = WiFi.RSSI(i);
+    hotspot.x = 0.0;
+    hotspot.y = 0.0;
+    hotspot.rssiAt1m = -45.0; // Default value
+    hotspot.pathLossExponent = 2.5; // Default value
     networks.push_back(hotspot);
   }
 
@@ -466,23 +489,18 @@ void updateSelectedHotspotsRSSI() {
         WiFiHotspot updatedHotspot = selected;
         updatedHotspot.rssi = scanned.rssi;
         updatedHotspots.push_back(updatedHotspot);
-        // Serial.print("Updated RSSI for ");
-        // Serial.print(selected.ssid);
-        // Serial.print(": ");
-        // Serial.print(updatedHotspot.rssi);
-        // Serial.println(" dBm");
         found = true;
         break;
       }
     }
     if (!found) {
-      Serial.print("\Hotspot ");
+      Serial.print("Hotspot ");
       Serial.print(selected.ssid);
-      Serial.println(" disconnected. Removing from selected hotspots.");
+      Serial.println(" disconnected. Removing from selectedK selected hotspots.");
     }
   }
 
-  // Replace selectedHotspots with updated 
+  // Replace selectedHotspots with updated
   selectedHotspots = std::move(updatedHotspots);
 
   WiFi.scanDelete();

@@ -5,7 +5,7 @@ void HotspotDatabase::begin() {
   EEPROM.begin(EEPROM_SIZE);
 }
 
-void HotspotDatabase::save(const String& ssid, float x, float y) {
+void HotspotDatabase::save(const String& ssid, float x, float y, float rssiAt1m, float pathLossExponent) {
   if (ssid.length() >= SSID_MAX_LEN) {
     Serial.println("SSID too long, skipping save.");
     return;
@@ -21,6 +21,8 @@ void HotspotDatabase::save(const String& ssid, float x, float y) {
       strncpy(entry.ssid, ssid.c_str(), SSID_MAX_LEN);
       entry.x = x;
       entry.y = y;
+      entry.rssiAt1m = rssiAt1m;
+      entry.pathLossExponent = pathLossExponent;
       EEPROM.put(addr, entry);
       EEPROM.commit();
       Serial.println("Updated existing hotspot in EEPROM.");
@@ -37,6 +39,8 @@ void HotspotDatabase::save(const String& ssid, float x, float y) {
       strncpy(entry.ssid, ssid.c_str(), SSID_MAX_LEN);
       entry.x = x;
       entry.y = y;
+      entry.rssiAt1m = rssiAt1m;
+      entry.pathLossExponent = pathLossExponent;
       EEPROM.put(addr, entry);
       EEPROM.commit();
       Serial.println("Saved new hotspot to EEPROM.");
@@ -47,7 +51,7 @@ void HotspotDatabase::save(const String& ssid, float x, float y) {
   Serial.println("EEPROM is full. Could not save hotspot.");
 }
 
-bool HotspotDatabase::load(const String& ssid, float& x, float& y) {
+bool HotspotDatabase::load(const String& ssid, float& x, float& y, float& rssiAt1m, float& pathLossExponent) {
   for (int i = 0; i < MAX_HOTSPOTS; i++) {
     int addr = i * sizeof(HotspotEntry);
     HotspotEntry entry;
@@ -55,6 +59,8 @@ bool HotspotDatabase::load(const String& ssid, float& x, float& y) {
     if (String(entry.ssid) == ssid) {
       x = entry.x;
       y = entry.y;
+      rssiAt1m = entry.rssiAt1m;
+      pathLossExponent = entry.pathLossExponent;
       return true;
     }
   }
@@ -81,14 +87,18 @@ void HotspotDatabase::listAll() {
       Serial.print(", x: ");
       Serial.print(entry.x);
       Serial.print(", y: ");
-      Serial.println(entry.y);
+      Serial.print(entry.y);
+      Serial.print(", RSSI@1m: ");
+      Serial.print(entry.rssiAt1m);
+      Serial.print(", PathLoss: ");
+      Serial.println(entry.pathLossExponent);
     }
   }
 }
 
 void HotspotDatabase::clear() {
   for (int i = 0; i < MAX_HOTSPOTS; i++) {
-    int addr = (i * sizeof(HotspotEntry)) + sizeof(uint8_t);
+    int addr = i * sizeof(HotspotEntry);
     HotspotEntry entry;
     memset(&entry, 0, sizeof(HotspotEntry)); // Clear entry to zeros
     EEPROM.put(addr, entry);

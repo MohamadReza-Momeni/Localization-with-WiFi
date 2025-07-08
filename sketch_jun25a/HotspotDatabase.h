@@ -11,13 +11,15 @@
 struct HotspotEntry {
   char ssid[SSID_MAX_LEN];
   float x, y;
+  float rssiAt1m;       // RSSI at 1 meter
+  float pathLossExponent; // Path loss exponent
 };
 
 class HotspotDatabase {
 public:
   void begin();  // Initialize EEPROM
-  void save(const String& ssid, float x, float y);
-  bool load(const String& ssid, float& x, float& y);
+  void save(const String& ssid, float x, float y, float rssiAt1m, float pathLossExponent);
+  bool load(const String& ssid, float& x, float& y, float& rssiAt1m, float& pathLossExponent);
   void listAll();
   void clear();
 };
