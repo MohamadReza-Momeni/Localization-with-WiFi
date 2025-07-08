@@ -17,8 +17,12 @@ class LocationFinder {
 private:
   const int MIN_HOTSPOTS = 2;
   std::vector<WiFiHotspot> hotspots;
+  bool initialized; // Kalman filter initialization flag
+  float state[2]; // Kalman filter state [x, y]
+  float covariance[2][2]; // Kalman filter covariance matrix
 
   float rssiToDistance(const WiFiHotspot& hotspot);
+  void kalmanFilter(float measurementX, float measurementY);
 
 public:
   LocationFinder(const std::vector<WiFiHotspot>& selectedHotspots);
